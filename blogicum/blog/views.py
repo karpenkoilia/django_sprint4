@@ -28,50 +28,41 @@ class IndexListView(ListView):
         Post.objects.annotate(comment_count=Count('comment')))
     paginate_by = PAGINATE_NUMBER
     template_name = 'blog/index.html'
+    ordering = '-pub_date'
 
 
-def category_posts(request, category_slug):
-    category = get_object_or_404(
-        Category.objects.filter(is_published=True), slug=category_slug)
-    post_list = category.posts.filter(
-        pub_date__lte=timezone.now(),
-        is_published=True)
-    template = 'blog/category.html'
-    context = {'category': category,
-               'post_list': post_list}
-    return render(request, template, context)
 
-
-# Тут нужно написать cbv для вывода категорий
-'''class CategoryListView(ListView):
+class CategoryListView(ListView):
     model = Category
     template_name = 'blog/category.html'
-    pk_url_kwarg = 'category_slug'
+    slug_url_kwarg = 'category_slug'
+    paginate_by = PAGINATE_NUMBER
+
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["category"] = get_object_or_404(
-            Category.objects.filter(is_published=True),
-            slug=self.kwargs['category_slug'])
-        context["post_list"] = Category.posts.filter(
-        pub_date__lte=timezone.now(),
-        is_published=True)
-        return context'''
+        category = get_object_or_404(
+        Category.objects.filter(is_published=True),
+        slug=self.kwargs['category_slug'])
+
+        context["category"] = category
+        context["page_obj"] = category.posts.filter(
+            pub_date__lte=timezone.now(),is_published=True).annotate(
+                comment_count=Count('comment')).order_by('-pub_date')
+        return context
 
 
 class ProfileListView(LoginRequiredMixin, ListView):
     model = Post
-    ordering = 'pub_date'
     paginate_by = PAGINATE_NUMBER
     template_name = 'blog/profile.html'
 
     def get_queryset(self):
         if self.kwargs['username'] == self.request.user.username:
-            query_set = filter_queryset(
-                Post.objects.annotate(
-                    comment_count=Count('comment'))).filter(
-                        author__username=self.kwargs['username'])
-        return query_set
+            return Post.objects.annotate(
+                comment_count=Count('comment')).filter(
+                    author__username=self.kwargs['username']).order_by(
+                        '-pub_date')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -117,6 +108,12 @@ class PostDetailView(DetailView):
     template_name = 'blog/detail.html'
     pk_url_kwarg = 'post_id'
 
+    def dispatch(self, request, *args, **kwargs):
+        post = get_object_or_404(Post, pk=kwargs['post_id'])
+        if not post.category.is_published and post.author != request.user:
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = CommentsForm()
@@ -135,7 +132,7 @@ class PostUpdateView(LoginRequiredMixin, UpdateView):
     def dispatch(self, request, *args, **kwargs):
         instance = get_object_or_404(Post, pk=kwargs['post_id'])
         if instance.author != request.user:
-            raise PermissionDenied
+            return redirect('blog:post_detail', post_id=kwargs['post_id'])
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):

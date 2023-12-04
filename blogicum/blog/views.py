@@ -1,4 +1,5 @@
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect
 from blog.models import Post, Category
 from django.utils import timezone
 from django.views.generic import (
@@ -6,11 +7,11 @@ from django.views.generic import (
     DeleteView, DetailView, View)
 from .models import Comments, Post
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.exceptions import PermissionDenied
 from django.contrib.auth.models import User
 from .forms import UserUpdateForm, PostCreateForm, CommentsForm
 from django.urls import reverse
 from django.db.models import Count
+from django.core.paginator import Paginator
 
 last = 5
 PAGINATE_NUMBER = 10
@@ -38,17 +39,18 @@ class CategoryListView(ListView):
     slug_url_kwarg = 'category_slug'
     paginate_by = PAGINATE_NUMBER
 
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        category = get_object_or_404(
-        Category.objects.filter(is_published=True),
-        slug=self.kwargs['category_slug'])
-
+        category = get_object_or_404(Category.objects.filter(
+            is_published=True),slug=self.kwargs['category_slug'])
         context["category"] = category
-        context["page_obj"] = category.posts.filter(
+        posts = category.posts.filter(
             pub_date__lte=timezone.now(),is_published=True).annotate(
-                comment_count=Count('comment')).order_by('-pub_date')
+            comment_count=Count('comment')).order_by('-pub_date')
+        paginator = Paginator(posts, self.paginate_by)
+        page_number = self.request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        context["page_obj"] = page_obj
         return context
 
 
@@ -63,6 +65,11 @@ class ProfileListView(LoginRequiredMixin, ListView):
                 comment_count=Count('comment')).filter(
                     author__username=self.kwargs['username']).order_by(
                         '-pub_date')
+        else:
+            return filter_queryset(Post.objects.annotate(
+                comment_count=Count('comment')).filter(
+                    author__username=self.kwargs['username']).order_by(
+                        '-pub_date'))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -78,7 +85,7 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
-            raise PermissionDenied
+            raise Http404
         return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
@@ -111,7 +118,7 @@ class PostDetailView(DetailView):
     def dispatch(self, request, *args, **kwargs):
         post = get_object_or_404(Post, pk=kwargs['post_id'])
         if not post.category.is_published and post.author != request.user:
-            raise PermissionDenied
+            raise Http404
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -152,7 +159,7 @@ class PostDeleteView(LoginRequiredMixin, DeleteView):
     def dispatch(self, request, *args, **kwargs):
         instance = get_object_or_404(Post, pk=kwargs['post_id'])
         if instance.author != request.user:
-            raise PermissionDenied
+            raise Http404
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):

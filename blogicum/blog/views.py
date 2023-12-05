@@ -54,27 +54,25 @@ class CategoryListView(ListView):
         return context
 
 
-class ProfileListView(LoginRequiredMixin, ListView):
+class ProfileListView(ListView):
     model = Post
     paginate_by = PAGINATE_NUMBER
     template_name = 'blog/profile.html'
 
     def get_queryset(self):
-        if self.kwargs['username'] == self.request.user.username:
-            return Post.objects.annotate(
+        return Post.objects.annotate(
                 comment_count=Count('comment')).filter(
                     author__username=self.kwargs['username']).order_by(
                         '-pub_date')
-        else:
-            return filter_queryset(Post.objects.annotate(
-                comment_count=Count('comment')).filter(
-                    author__username=self.kwargs['username']).order_by(
-                        '-pub_date'))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['profile'] = get_object_or_404(
-            User, username=self.kwargs['username'])
+        user = User.objects.filter(
+            username=self.kwargs['username'])
+        if user is not None:
+            context['profile'] = user
+        else: 
+            Http404("Пользователь не найден")
         return context
 
 

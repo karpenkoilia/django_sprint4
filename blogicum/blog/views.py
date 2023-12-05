@@ -58,20 +58,19 @@ class ProfileListView(ListView):
     model = Post
     paginate_by = PAGINATE_NUMBER
     template_name = 'blog/profile.html'
-
+    
     def get_queryset(self):
-        return Post.objects.annotate(
-                comment_count=Count('comment')).filter(
-                    author__username=self.kwargs['username']).order_by(
-                        '-pub_date')
-
+        try:
+            user = User.objects.get(username=self.kwargs['username'])
+        except User.DoesNotExist:
+            raise Http404("Пользователь не найден")
+        return Post.objects.filter(author=user).annotate(
+            comment_count=Count('comment')).order_by('-pub_date')
+    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = User.objects.filter(username=self.kwargs['username']).first()
-        if user is not None:
-            context['profile'] = user
-        else: 
-            Http404("Пользователь не найден")
+        context['profile'] = user
         return context
 
 
@@ -114,7 +113,7 @@ class PostDetailView(DetailView):
 
     def dispatch(self, request, *args, **kwargs):
         post = get_object_or_404(Post, pk=kwargs['post_id'])
-        if not post.category.is_published and post.author != request.user:
+        if not post.is_published and post.author != request.user:
             raise Http404
         else:
             return super().dispatch(request, *args, **kwargs)
@@ -199,15 +198,15 @@ class CommentMixin(LoginRequiredMixin, View):
     template_name = "blog/comment.html"
     pk_url_kwarg = "comment_id"
 
-
     def dispatch(self, request, *args, **kwargs):
         comment = get_object_or_404(
             Comments,
-            id=kwargs['comment_id']
+            id=kwargs['comment_id'],
         )
         if comment.author != request.user:
             return redirect('blog:post_detail', pk=kwargs['post_id'])
-        return super().dispatch(request, *args, **kwargs)
+        else:
+            return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
         return reverse("blog:post_detail",

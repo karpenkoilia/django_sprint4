@@ -32,7 +32,6 @@ class IndexListView(ListView):
     ordering = '-pub_date'
 
 
-
 class CategoryListView(ListView):
     model = Category
     template_name = 'blog/category.html'
@@ -42,10 +41,10 @@ class CategoryListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         category = get_object_or_404(Category.objects.filter(
-            is_published=True),slug=self.kwargs['category_slug'])
+            is_published=True), slug=self.kwargs['category_slug'])
         context["category"] = category
         posts = category.posts.filter(
-            pub_date__lte=timezone.now(),is_published=True).annotate(
+            pub_date__lte=timezone.now(), is_published=True).annotate(
             comment_count=Count('comment')).order_by('-pub_date')
         paginator = Paginator(posts, self.paginate_by)
         page_number = self.request.GET.get('page')
@@ -58,7 +57,7 @@ class ProfileListView(ListView):
     model = Post
     paginate_by = PAGINATE_NUMBER
     template_name = 'blog/profile.html'
-    
+
     def get_queryset(self):
         try:
             user = User.objects.get(username=self.kwargs['username'])
@@ -66,7 +65,7 @@ class ProfileListView(ListView):
             raise Http404("Пользователь не найден")
         return Post.objects.filter(author=user).annotate(
             comment_count=Count('comment')).order_by('-pub_date')
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = User.objects.filter(username=self.kwargs['username']).first()
@@ -200,17 +199,21 @@ class CommentMixin(LoginRequiredMixin, View):
 
     def dispatch(self, request, *args, **kwargs):
         comment = get_object_or_404(
-            Comments,
-            id=kwargs['comment_id'],
-        )
+            Comments, id=kwargs['comment_id'])
         if comment.author != request.user:
-            return redirect('blog:post_detail', pk=kwargs['post_id'])
+            return redirect('blog:post_detail', post_id=kwargs['post_id'])
         else:
             return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
         return reverse("blog:post_detail",
                        kwargs={'post_id': self.kwargs['post_id']})
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["comment"] = get_object_or_404(
+            Comments, id=self.kwargs['comment_id'])
+        return context
 
 
 class CommentUpdateView(CommentMixin, UpdateView):

@@ -119,7 +119,8 @@ class PostDetailView(DetailView):
         post = get_object_or_404(Post, pk=kwargs['post_id'])
         if not post.category.is_published and post.author != request.user:
             raise Http404
-        return super().dispatch(request, *args, **kwargs)
+        else:
+            return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -197,17 +198,18 @@ class CommentsCreateView(LoginRequiredMixin, CreateView):
 
 class CommentMixin(LoginRequiredMixin, View):
     model = Comments
+    form_class = CommentsForm
     template_name = "blog/comment.html"
     pk_url_kwarg = "comment_id"
-    form_class = CommentsForm
+
 
     def dispatch(self, request, *args, **kwargs):
         comment = get_object_or_404(
             Comments,
-            pk=kwargs['comment_id'],
+            id=kwargs['comment_id']
         )
         if comment.author != request.user:
-            return redirect('blog:post_detail', post_id=kwargs['post_id'])
+            return redirect('blog:post_detail', pk=kwargs['post_id'])
         return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):

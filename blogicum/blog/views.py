@@ -67,8 +67,7 @@ class ProfileListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user = User.objects.filter(
-            username=self.kwargs['username'])
+        user = User.objects.filter(username=self.kwargs['username']).first()
         if user is not None:
             context['profile'] = user
         else: 

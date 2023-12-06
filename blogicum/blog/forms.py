@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 from .models import Post, Comments
+from django.utils.timezone import now
 
 
 class UserUpdateForm(forms.ModelForm):
@@ -11,15 +12,17 @@ class UserUpdateForm(forms.ModelForm):
 
 
 class PostCreateForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            self.initial['pub_date'] = now().strftime('%Y-%m-%dT%H:%M')
 
     class Meta:
         model = Post
-        fields = (
-            'title', 'text', 'pub_date',
-            'location', 'category', 'image',
-            'is_published')
+        exclude = ('author',)
         widgets = {'pub_date': forms.DateTimeInput(
-            attrs={'type': 'datetime-local', 'class': 'datetime-input'})}
+            attrs={'type': 'datetime-local', 'class': 'datetime-input', },
+            format='%Y-%m-%dT%H:%M'), }
 
 
 class CommentsForm(forms.ModelForm):
